@@ -257,6 +257,9 @@ BB.append(getExtremePoint("z", True, vertPos))
 vertPos2 = []
 for i in range(0, len(vertPos)):
     vertPos2.append(R[???] * numpy.transpose(P0
-vList.split('[')
+    
+ #!!!
+ [int(s) for s in str.split() if s.isdigit()]
+ #!!!
 
 P0rotated = R[0] * numpy.transpose(P0[0])
