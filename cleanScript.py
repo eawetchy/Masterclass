@@ -220,8 +220,43 @@ R = []
 # find local source vertex coordinate systems before deformation, then after deformation
 for i in range(0, len(P0)):
     localOrig = findLocal(AllP0[i], N0[i])
-    localDef = findLocal(AllPDef[i], N0[i])
+    localDef = findLocal(AllPDef[i], N1[i])
     ODR = findRotationMatrix(localOrig, localDef)
     R.append(ODR)
 
-MVdef = R[0]*numpy.transpose(MV[0])
+# duplicate deformed source to make blendshape
+cmds.duplicate("sourceDeformed", n = "targetBlendshape")
+cmds.select(clear=True)
+cmds.select("targetBlendshape.vtx[*]")
+defBlend = cmds.ls(sl=1, fl=True)
+
+for i in range(0,n):
+    MVdef = R[i]*numpy.transpose(MV[i])
+    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+    
+    
+#-------------MOTION VECTOR SIZE ADJUSTMENT----------------#    
+
+# find faces sharing a vertex
+faces = cmds.polyListComponentConversion( AllP0[0], fv=True, tf=True )
+faces = cmds.ls( faces, flatten=True )
+vList = cmds.polyListComponentConversion( faces, ff=True, tv=True )
+vList = cmds.ls( vList, flatten=True )
+vertPos = []
+for i in range(0, len(vList)):
+    vertPos.append(cmds.pointPosition(vList[i], w=True))
+#find bounding box of vertices
+BB = []
+BB.append(getExtremePoint("x", False, vertPos))
+BB.append(getExtremePoint("x", True, vertPos))
+BB.append(getExtremePoint("y", False, vertPos))
+BB.append(getExtremePoint("y", True, vertPos))
+BB.append(getExtremePoint("z", False, vertPos))
+BB.append(getExtremePoint("z", True, vertPos))
+
+vertPos2 = []
+for i in range(0, len(vertPos)):
+    vertPos2.append(R[???] * numpy.transpose(P0
+vList.split('[')
+
+P0rotated = R[0] * numpy.transpose(P0[0])
