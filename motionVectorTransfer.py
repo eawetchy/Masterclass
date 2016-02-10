@@ -97,12 +97,12 @@ def findRotationMatrix(localOrig, localBlend):
     owR = numpy.zeros((3,3)) # rotation from a local source vertex coordinate axes to the world coordinate axes
     for i in range(0,2):
         for j in range(0,2):
-            owR[i][j] = numpy.dot(world[i], numpy.transpose(local[j]))
+            owR[i][j] = numpy.dot(world[i], numpy.transpose(localOrig[j]))
 
     wdR = numpy.zeros((3,3)) # rotation from world axes to the local deformed vertex axes vertex axes
     for i in range(0,2):
         for j in range(0,2):
-            wdR[i][j] = numpy.dot(deformed[i], numpy.transpose(world[j]))
+            wdR[i][j] = numpy.dot(localDef[i], numpy.transpose(world[j]))
         
     odR = wdR * owR 
     return odR
