@@ -1,0 +1,53 @@
+#vertex list transformTarget
+targetVtcs = getVtxPos( "targetShape" )
+
+#vertex list transformSource
+sourceVtcs = getVtxPos( "sourceShape1" )
+
+#extreme points transformTarget
+targetLM = []
+tHX = getExtremePoint( "x", True, targetVtcs )
+targetLM.append(tHX)
+tLX = getExtremePoint( "x", False, targetVtcs )
+targetLM.append(tLX)
+tHY = getExtremePoint( "y", True, targetVtcs )
+targetLM.append(tHY)
+tLY = getExtremePoint( "y", False, targetVtcs )
+targetLM.append(tLY)
+tHZ = getExtremePoint( "z", True, targetVtcs )
+targetLM.append(tHZ)
+tLZ = getExtremePoint( "z", False, targetVtcs )
+targetLM.append(tLZ)
+
+#extreme points transformSource
+sourceLM = []
+sHX = getExtremePoint( "x", True, sourceVtcs )
+sourceLM.append(sHX)
+sLX = getExtremePoint( "x", False, sourceVtcs )
+sourceLM.append(sLX)
+sHY = getExtremePoint( "y", True, sourceVtcs )
+sourceLM.append(sHY)
+sLY = getExtremePoint( "y", False, sourceVtcs )
+sourceLM.append(sLY)
+sHZ = getExtremePoint( "z", True, sourceVtcs )
+sourceLM.append(sHZ)
+sLZ = getExtremePoint( "z", False, sourceVtcs )
+sourceLM.append(sLZ)
+
+#move transform source points
+count = 0
+for i in sourceLM:
+    listIndex = targetLM[count]
+    count+=1    
+    cmds.polyMoveVertex( "source1.vtx[" + str(i) + "]", t =  targetVtcs[listIndex])
+
+#so far only this works because world space won't let itself be turned on
+count = 0
+for i in sourceLM:
+    listIndex = targetLM[count]
+    listIndex2 = sourceLM[count]   
+    x = targetVtcs[listIndex][0] - sourceVtcs[listIndex2][0]
+    y = targetVtcs[listIndex][1] - sourceVtcs[listIndex2][1]
+    z = targetVtcs[listIndex][2] - sourceVtcs[listIndex2][2]
+    count+=1    
+    cmds.polyMoveVertex( "source1.vtx[" + str(i) + "]", t =  [x, y, z])

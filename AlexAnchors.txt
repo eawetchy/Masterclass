@@ -1,0 +1,680 @@
+import maya.cmds as cmds
+import functools as ft
+
+
+def main():
+    UI()
+    
+def findPoints(_obj):
+    
+    #------Gets all vertex positions
+    objTemp = str(cmds.ls(_obj))    #query object  
+    obj = objTemp.split("'")[1]    #edit so we can use data 
+    vertPosTemp = cmds.xform(obj + '.vtx[*]', q=True, ws=True, t=True)    #gets positions    
+    vertList = zip(*[iter(vertPosTemp)]*3)    #makes each array element contain x, y, z
+    
+        
+    #------Gets vertex normal value
+    def getNormal(_vtx):
+        vertName = _obj + '.vtx[' + str(_vtx) + ']'
+        normTemp = cmds.polyNormalPerVertex(vertName, query=True, xyz=True)
+        norms = zip(*[iter(normTemp)]*3)
+        #values for averages
+        xAve=0
+        yAve=0
+        zAve=0
+        #get average vertex normal
+        for i in range (len(norms)):
+            xAve += norms[i][0]
+            yAve += norms[i][1]
+            zAve += norms[i][2]
+        leng = len(norms) 
+        xAve = xAve/leng
+        yAve = yAve/leng
+        zAve = zAve/leng
+        aveList = [xAve, yAve, zAve]
+        return aveList
+    
+    #------Gets all normal values
+    normList = []
+    for i in range (len(vertList)):
+        normList.append(getNormal(i))
+               
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~HEURISTIC VALUES~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~    
+    """Finds bottom of head"""
+    def headBot():
+        yVal = vertList[0][1]
+        for i in range (len(vertList)):
+            if yVal > vertList[i][1] and normList[i][1] < -0.9:
+                yVal = vertList[i][1]
+                vtx = i
+        return vtx  
+        
+    """Finds top of head"""
+    def headTop():
+        yVal = vertList[0][1]
+        for i in range(len(vertList)):
+            #Finds highest y value and returns vtx num
+            if yVal < vertList[i][1]:
+                yVal = vertList[i][1]
+                vtx = i
+        return vtx
+    
+    """Finds right ear"""
+    def rightEar():
+        xVal = vertList[0][0]
+        for i in range(len(vertList)):
+            #Finds lowest x value and returns vtx num
+            if xVal > vertList[i][0]:
+                xVal = vertList[i][0]
+                vtx = i
+        return vtx
+        
+    """Finds left ear"""
+    def leftEar():
+        xVal = vertList[0][0]
+        for i in range(len(vertList)):
+            #finds highest x value and returns vtx num
+            if xVal < vertList[i][0]:
+                xVal = vertList[i][0]
+                vtx = i
+        return vtx 
+        
+    """Finds nose tip"""
+    def noseTip():
+        zVal = vertList[0][2]
+        #check through all entries, if central and highest z value, return it
+        for i in range(len(vertList)):      
+            if vertList[i][2] > zVal and -0.02 <= vertList[i][0] <= 0.02:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx 
+        
+    """Finds top of nose"""
+    def noseTop():
+        nTip = noseTip()
+        hTop = headTop()
+        zVal = vertList[0][2]
+        yVal = vertList[nTip][1]
+        vtx = nTip      
+        #finds approximate range to look for bridge
+        gap = vertList[hTop][1] - vertList[nTip][1] #gap size between head and nose
+        min = vertList[nTip][1]+(gap*0.15) 
+        max = vertList[hTop][1]-(gap*0.55)   
+        #if central in x, in the approximate y range, look for lowest z 
+        for i in range(len(vertList)): 
+            if -0.02 < vertList[i][0] < 0.02 and min <= vertList[i][1] <= max and 0 < vertList[i][2] < vertList[nTip][2]:
+                if zVal > vertList[i][2]:
+                    zVal = vertList[i][2]
+                    vtx = i
+        return vtx  
+        
+    '''Finds right lip corner''' 
+    def rightLip():
+        nTip = noseTip()
+        hBot = headBot()
+        rEar = rightEar()
+        xGap = vertList[rEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.2)
+        xMax = vertList[nTip][0] + (xGap * 0.5)
+        yGap = vertList[nTip][1] - vertList[hBot][1]
+        yMax = vertList[nTip][1] - (yGap * 0.3)
+        yMin = vertList[nTip][1] - (yGap * 0.45)
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and normList[i][2] > 0.9 and xMin > vertList[i][0] > xMax: 
+                vtx = i
+        return vtx
+        
+    '''finds left lip corner'''
+    def leftLip():
+        nTip = noseTip()
+        hBot = headBot()
+        lEar = leftEar()
+        xGap = vertList[lEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.2)
+        xMax = vertList[nTip][0] + (xGap * 0.5)
+        yGap = vertList[nTip][1] - vertList[hBot][1]
+        yMax = vertList[nTip][1] - (yGap * 0.3)
+        yMin = vertList[nTip][1] - (yGap * 0.45)
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and normList[i][2] > 0.9 and xMin < vertList[i][0] < xMax: 
+                vtx = i   
+        return vtx
+    
+    def leftBrowIn(): 
+        nTop = noseTop()
+        zVal = vertList[nTop][2]
+        for i in range (len(vertList)):
+            #if z value is higher than last queried and it's y is higher than nose bridge
+            if vertList[i][2] > zVal and vertList[i][1] > vertList[nTop][1] and normList[i][1] < 0 and vertList[i][0] > 0 and normList[i][2] < 0.9:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def rightBrowIn(): 
+        nTop = noseTop()
+        zVal = vertList[nTop][2]
+        for i in range (len(vertList)):
+            #if z>zVal, y>nTop, yNorm faces down, is on right of face, points away from face
+            if vertList[i][2] > zVal and vertList[i][1] > vertList[nTop][1] and normList[i][1] < 0 and vertList[i][0] < 0 and normList[i][2] < 0.9:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def leftBrowOut():
+        nTop = noseTop()
+        lEar = leftEar()
+        lBrowIn = leftBrowIn()
+        
+        xGap = vertList[lEar][0] - vertList[nTop][0]
+        xMin = vertList[nTop][0] + (xGap * 0.5)
+        xMax = vertList[nTop][0] + (xGap * 0.75)
+        xVal = vertList[lBrowIn][0]
+        zVal = -1
+        for i in range (len(vertList)):
+            if 0.5 < normList[i][0] < 0.75 and vertList[nTop][1] < vertList[i][1] < (vertList[lBrowIn][1]+0.03) and xMin < vertList[i][0] < xMax and vertList[i][2] > zVal and normList[i][2] > 0:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def rightBrowOut():
+        nTop = noseTop()
+        rEar = rightEar()
+        rBrowIn = rightBrowIn()
+        
+        xGap = vertList[rEar][0] - vertList[nTop][0]
+        xMin = vertList[nTop][0] + (xGap * 0.5)
+        xMax = vertList[nTop][0] + (xGap * 0.75)
+        xVal = vertList[rBrowIn][0]
+        zVal = -1
+        for i in range (len(vertList)):
+            if -0.5 > normList[i][0] > -0.75 and vertList[nTop][1] < vertList[i][1] < (vertList[rBrowIn][1]+0.03) and xMin > vertList[i][0] > xMax and vertList[i][2] > zVal and normList[i][2] > 0:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+    
+    def topLip():
+        nTip = noseTip()
+        hBot = headBot()
+        
+        yGap = vertList[nTip][1] - vertList[hBot][1]
+        yMax = vertList[nTip][1] - (yGap * 0.3)
+        yMin = vertList[nTip][1] - (yGap * 0.6)
+        zVal = vertList[nTip][2] * -1
+        
+        for i in range (len(vertList)):
+            if normList[i][1] < -0.8 and -0.01 <= vertList[i][0] <= 0.01 and yMin < vertList[i][1] < yMax and zVal < vertList[i][2]:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def botLip():
+        nTip = noseTip()
+        hBot = headBot()
+        
+        yGap = vertList[nTip][1] - vertList[hBot][1]
+        yMax = vertList[nTip][1] - (yGap * 0.3)
+        yMin = vertList[nTip][1] - (yGap * 0.6)
+        zVal = vertList[nTip][2] * -1
+        
+        for i in range (len(vertList)):
+            if normList[i][1] > 0.75 and -0.01 <= vertList[i][0] <= 0.01 and yMin < vertList[i][1] < yMax and zVal < vertList[i][2]:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def chin():
+        hBot = headBot()
+        nTip = noseTip()
+        
+        yGap = vertList[nTip][1] - vertList[hBot][1]
+        yMax = vertList[nTip][1] - (yGap * 0.6)
+        yMin = vertList[nTip][1] - (yGap * 0.8)
+        zVal = vertList[hBot][2]
+        
+        for i in range (len(vertList)):
+            if vertList[i][2] > zVal and normList[i][2] > 0.9 and yMin <vertList[i][1] < yMax and -0.01 <= vertList[i][0] <= 0.01:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def forehead():
+        nTop = noseTop()
+         
+        yNorm = 0
+        for i in range (len(vertList)):
+            if vertList[i][1] > vertList[nTop][1] and -0.01 <= vertList[i][0] <= 0.01 and yNorm < normList[i][1]:
+                if yNorm < 0.5:
+                    yNorm = normList[i][1]
+                    vtx = i
+        return vtx
+    
+    def leftCheek():
+        nTip = noseTip()
+        lEar = leftEar()
+        hTop = headTop()
+        hBot = headBot()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/20
+        yMax = vertList[nTip][1] + yGap
+        yMin = vertList[nTip][1] - yGap
+        
+        xGap = vertList[lEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.5)
+        xMax = vertList[nTip][0] + (xGap * 0.6)
+        zNorm = 0
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and normList[i][2] > zNorm:
+                zNorm = normList[i][2]
+                vtx = i
+        return vtx
+        
+    def rightCheek():
+        nTip = noseTip()
+        rEar = rightEar()
+        hTop = headTop()
+        hBot = headBot()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/20
+        yMax = vertList[nTip][1] + yGap
+        yMin = vertList[nTip][1] - yGap
+        
+        xGap = vertList[rEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.5)
+        xMax = vertList[nTip][0] + (xGap * 0.6)
+        zNorm = 0
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin > vertList[i][0] > xMax and normList[i][2] > zNorm:
+                zNorm = normList[i][2]
+                vtx = i
+        return vtx
+        
+      
+    def rightNose():
+        nTip = noseTip()
+        rEar = rightEar()
+        hTop = headTop()
+        hBot = headBot()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/50
+        yMax = vertList[nTip][1] + yGap
+        yMin = vertList[nTip][1] - yGap
+        
+        xGap = vertList[rEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.15)
+        xMax = vertList[nTip][0] + (xGap * 0.2)
+        xVal = vertList[rEar][0]
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin > vertList[i][0] > xMax and vertList[i][0] > xVal and normList[i][0] < -0.9:
+                xVal = vertList[i][0]
+                vtx = i
+        return vtx     
+        
+    def leftNose():
+        nTip = noseTip()
+        lEar = leftEar()
+        hTop = headTop()
+        hBot = headBot()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/50
+        yMax = vertList[nTip][1] + yGap
+        yMin = vertList[nTip][1] - yGap
+        
+        xGap = vertList[lEar][0] - vertList[nTip][0]
+        xMin = vertList[nTip][0] + (xGap * 0.15)
+        xMax = vertList[nTip][0] + (xGap * 0.2)
+        xVal = vertList[lEar][0]
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and vertList[i][0] < xVal and normList[i][0] > 0.9:
+                xVal = vertList[i][0]
+                vtx = i
+        return vtx 
+        
+    def leftEyeIn():
+        nTop = noseTop()
+        hTop = headTop()
+        hBot = headBot()
+        lBrowIn = leftBrowIn()
+        lEar = leftEar()
+        rEar = rightEar()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/10
+        yMax = vertList[nTop][1]
+        yMin = vertList[nTop][1] - yGap
+        
+        xGap = (vertList[lEar][0] - vertList[rEar][0])/40
+        xMax = vertList[lBrowIn][0] + xGap
+        xMin = vertList[lBrowIn][0]
+        zVal = vertList[nTop][2]
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and normList[i][2] > 0.7 and zVal > vertList[i][2]:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def rightEyeIn():
+        nTop = noseTop()
+        hTop = headTop()
+        hBot = headBot()
+        rBrowIn = rightBrowIn()
+        lEar = leftEar()
+        rEar = rightEar()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/10
+        yMax = vertList[nTop][1]
+        yMin = vertList[nTop][1] - yGap
+        
+        xGap = (vertList[lEar][0] - vertList[rEar][0])/40
+        xMax = vertList[rBrowIn][0]
+        xMin = vertList[rBrowIn][0] - xGap
+        zVal = vertList[nTop][2]
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and normList[i][2] > 0.7 and zVal > vertList[i][2]:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def leftEyeOut():
+        nTop = noseTop()
+        hTop = headTop()
+        hBot = headBot()
+        lBrowOut = leftBrowOut()
+        lEar = leftEar()
+        rEar = rightEar()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/10
+        yMax = vertList[nTop][1]
+        yMin = vertList[nTop][1] - yGap
+        
+        xGap = (vertList[lEar][0] - vertList[rEar][0])/15
+        xMax = vertList[lBrowOut][0]
+        xMin = vertList[lBrowOut][0] - xGap
+        zVal = vertList[nTop][2]
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and zVal > vertList[i][2] and -0.3 < normList[i][0] < 0.3 and normList[i][2] > 0.2:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx
+        
+    def rightEyeOut():
+        nTop = noseTop()
+        hTop = headTop()
+        hBot = headBot()
+        rBrowOut = rightBrowOut()
+        lEar = leftEar()
+        rEar = rightEar()
+        
+        yGap = (vertList[hTop][1] - vertList[hBot][1])/10
+        yMax = vertList[nTop][1]
+        yMin = vertList[nTop][1] - yGap
+        
+        xGap = (vertList[lEar][0] - vertList[rEar][0])/15
+        xMax = vertList[rBrowOut][0] + xGap
+        xMin = vertList[rBrowOut][0] 
+        zVal = vertList[nTop][2]
+        
+        for i in range (len(vertList)):
+            if yMin < vertList[i][1] < yMax and xMin < vertList[i][0] < xMax and zVal > vertList[i][2] and -0.3 < normList[i][0] < 0.3 and normList[i][2] > 0.2:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx  
+    
+    def headBack():
+        zVal = vertList[0][2]
+        #check through all entries, if central and highest z value, return it
+        for i in range(len(vertList)):      
+            if vertList[i][2] < zVal:
+                zVal = vertList[i][2]
+                vtx = i
+        return vtx 
+    
+    def neckFront():
+        yVal = vertList[noseTip()][1]
+        for i in range (len(vertList)):
+            if vertList[i][1]<yVal:
+                yVal = vertList[i][1]
+                vtx = i
+        return vtx
+        
+    #FOR LOOP ROUND NECK 
+    def neckFL():
+        yVal = vertList[noseTip()][1]
+        for i in range (len(vertList)):
+            if vertList[i][1]<yVal and vertList[i][0]>0:
+                yVal = vertList[i][1]
+                vtx = i
+        return vtx
+    def neckFR():
+        yVal = vertList[noseTip()][1]
+        for i in range (len(vertList)):
+            if vertList[i][1]<yVal and vertList[i][0]<0.02:
+                yVal = vertList[i][1]
+                vtx = i
+        return vtx
+    
+    def neckBack():
+        yVal = vertList[noseTip()][1]
+        for i in range (len(vertList)):
+            if vertList[i][1] < yVal and normList[i][2] < -0.9:
+                yVal=vertList[i][1]
+                vtx = i
+        return vtx
+               
+      
+    def betweenPts(_start, _end, _size):
+                
+        '''~~~~~~~'''
+        lis=[]
+        edgeList = cmds.polySelect(_obj, sep = (_start, _end))#gives edges in list
+        for i in range(len(edgeList)):#-1 because it gives the start point twice
+            nm = _obj + '.e[' + str(edgeList[i]) + ']'
+            cmds.select(nm)#selects edge
+            edge = cmds.polyInfo(ev=True)#gets vtxs in edge
+            temp = edge[0]#because it breaks
+            a=temp[19:]#because it gives it in a shit awful format
+            if (len(a))>9:#~~~~~~~~~~~~~BECAUSE FUUUUUUUUUUUUUUUUUUU(sometimes adds HARD>!>!?!?!?!)
+                a = a[:9]
+            lis.append(int(a))#add to lsit
+        cmds.select(cl=True)
+        newLis=[]
+        siz=float(len(lis))#because rounding gives nicer outputs
+        step = siz/(_size+1)#divide by number of pts(+1)
+        for i in range (_size+1):#how many points+1
+            if i != 0:
+                stepInt=int(step*i)#needs to be int now
+                newLis.append(lis[stepInt])
+        return newLis
+     
+                       
+    #Generates list of points   
+    anchorList = [headTop(),headBot(), noseTip(),noseTop(), leftEar(),rightEar(), leftLip(),rightLip(),topLip(),botLip(), \
+                 leftBrowIn(),rightBrowIn(),leftBrowOut(),rightBrowOut(), chin(),forehead(),leftCheek(),rightCheek(), \
+                 leftNose(),rightNose(),leftEyeIn(),rightEyeIn(),leftEyeOut(),rightEyeOut(), headBack(), neckBack(), neckFront()]
+    
+    def brows():
+        lBrow = betweenPts(anchorList[10], anchorList[12], 1)#left brow
+        rBrow = betweenPts(anchorList[11], anchorList[13], 1)
+        for i in range (len(lBrow)):
+            anchorList.append(lBrow[i])
+            anchorList.append(rBrow[i])
+     
+    def mouth():
+        TL = betweenPts(anchorList[6], anchorList[8], 5)
+        TR = betweenPts(anchorList[7], anchorList[8], 5)
+        BL = betweenPts(anchorList[6], anchorList[9], 5)
+        BR = betweenPts(anchorList[7], anchorList[9], 5)
+        for i in range (len(TL)):
+            anchorList.append(TL[i])
+            anchorList.append(TR[i])
+            anchorList.append(BL[i])
+            anchorList.append(BR[i])
+    
+    def neck():
+        nfr = neckFR()
+        r = betweenPts(nfr, anchorList[25], 2)
+        nfl = neckFL()
+        l = betweenPts(nfl, anchorList[25], 2)
+        for i in range (len(r)):
+            anchorList.append(r[i])
+            anchorList.append(l[i])
+    
+    def faceEdge():#PLACEHOLDER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        l = betweenPts(anchorList[40], anchorList[0], 3) #between FLNeck & top of head
+        r = betweenPts(anchorList[39], anchorList[0], 3)
+        for i in range (len(l)):
+            anchorList.append(r[i])
+            anchorList.append(l[i])
+        
+    #betweeny bits    
+    brows()
+    mouth()
+    neck()
+    faceEdge()#PLACEHOLDER REMEMBER!!!!!!!!!!!!
+    
+      
+    return anchorList
+    
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~MANIPULATION~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def moveVerts(_tVertList, _tgt, _displace):#TO ADD: getting ratios 
+    for i in range (len(_tVertList)):
+        cmds.softSelect(ssf=1)#soft select settings, **TO ADD: change size based on size of model(WHERE ITS MOVING)
+        tgtVtx = _tgt + '.vtx[' + str(_tVertList[i]) + ']'
+        #moves stuff
+        x = _displace[i][0]
+        y = _displace[i][1]
+        z = _displace[i][2]
+        cmds.select(tgtVtx)
+        cmds.move(x, y, z, r=True)
+       
+def setBlendShapes(_rVertList, _tVertList, _root, _tgt, *args):
+    queryList=cmds.blendShape(_root, q=True, w=1)#CHANGE THE NEUTRAL!¬!¬!¬!¬!¬!¬!¬!
+    tgtBlendList=[] #empty list of blend objects
+    cmds.select(_tgt)
+    cmds.blendShape(n='newBlendShape')#get to select head first
+    for i in range (len(queryList)): #
+        j=str(i) #converting to string
+        tgtName='tgt'+j #getting (BLENDSHAPE NAMES)
+        cmds.select(_tgt)#CHANGE THIS TO PASS VALUE
+        cmds.duplicate(n=tgtName) #make blendTargets
+        cmds.move(2.5*(i+1), tgtName, r=True, x=True)#moves new head to right; (change l8r depending on size of object)
+        
+        trgName='trg'+j
+        
+        cmds.move(0,0,0, trgName, ws=True)
+        
+        tgtBlendList.append(tgtName) #add to list
+        cmds.blendShape('newBlendShape', edit=True, t=(_tgt, i+1, tgtName, 1.0))
+        
+        displaceMap = displacement(j, _rVertList)
+        cmds.move(2.5*(i+1), trgName, r=True, x=True)
+        
+        moveVerts(_tVertList, tgtName, displaceMap) 
+        cmds.select(cl=True)
+
+def displacement(_i, _rVertList):
+    displaceList = []
+    for i in range (len(_rVertList)):
+        origVert = 'neutral.vtx[' + str(_rVertList[i]) + ']'#getting vert; replace neutral and pass through
+        origPos = cmds.xform(origVert, q=True, ws=True, t=True)
+        blendVert = 'trg' + str(_i) + '.vtx[' + str(_rVertList[i]) + ']' # gets name of blendshape ur manipulating, CHANGE TRG TO NAME FROM BLENDSHAPES
+        blendPos = cmds.xform(blendVert, q=True, ws=True, t=True)
+        for j in range (len(origPos)):#for x,y,z
+            diff = blendPos[j] - origPos[j]
+            displaceList.append(diff)
+    displaceVals = zip(*[iter(displaceList)]*3)
+    return displaceVals
+    
+
+
+'''_________________________User Interface___________________________'''
+def UI():   
+    
+    #LISTS OF ANCHORS
+    tgtPts = []
+    rtPts = []
+    tgtMesh = ''
+    rtMesh = ''
+    '''Uses selection to populate textfield'''
+    def useSelection(_field, *args):
+        txt = cmds.ls(sl=True)
+        cmds.textField( _field, edit=True, text=txt[0])
+        
+    ''''Retrieves text from textfield'''    
+    def retrieveText(_field, *_args):
+        val = cmds.textField(_field, q=True, text=True)
+        return val
+      
+    '''adds a point''' 
+    def newPoint(_newField, *args):
+        newFieldName = retrieveText(_newField)
+        cmds.text(label=newFieldName)
+        newRootField = cmds.intField()
+        newTgtField = cmds.intField()
+        rootFieldList.append(newRootField)
+        tgtFieldList.append(newTgtField) 
+        cmds.textField('newPointTxt', edit=True, tx='')
+        
+    def getAnchors(_rtField, _tgtField, *args):
+        #root
+        rtMesh = retrieveText(_rtField)
+        rtTemp = findPoints(rtMesh)
+        for i in range(len(rtTemp)):
+            rtPts.append(rtTemp[i])
+        #tgt  
+        tgtMesh = retrieveText(_tgtField) 
+        tgtTemp = findPoints(tgtMesh)
+        for i in range (len(tgtTemp)):
+            tgtPts.append(tgtTemp[i])
+        print 'Got Pts'
+        print 'root: ',rtPts
+        print 'target: ',tgtPts
+            
+    def selTgts(_field, *args):
+        #root
+        for i in range (len(tgtPts)):
+            name = retrieveText(_field) + '.vtx[' + str(tgtPts[i]) + ']'
+            cmds.select(name, add=True)
+        
+    def selRoots(_field, *args):
+        #root
+        for i in range (len(rtPts)):
+            name = retrieveText(_field) + '.vtx[' + str(rtPts[i]) + ']'
+            cmds.select(name, add=True)
+                
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~LAYOUT~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~          
+    #if window exists, delete
+    if cmds.window("mainUI", exists = True):
+        cmds.deleteUI("mainUI")  
+            
+    #creates window
+    mainWindow = cmds.window("mainUI", title = "Expression Cloning", widthHeight=(200, 55), mnb = True, mxb = False, sizeable = True)
+    #creates layout
+    #cmds.formLayout()
+    cmds.rowColumnLayout(numberOfColumns=3, columnWidth=[(1, 75), (2, 75), (3, 75)], columnOffset=[(1,'left',3)])
+    
+    #root model
+    cmds.text(label='Root Model:')
+    rootField = cmds.textField()
+    cmds.button(label = 'Selection', c = ft.partial(useSelection, rootField))
+    
+    #target model
+    cmds.text(label='Target Model:')
+    targetField = cmds.textField()
+    cmds.button(label = 'Selection', c = ft.partial(useSelection, targetField)) 
+    
+    #test
+    cmds.button(label = 'Get Anchors', c = ft.partial(getAnchors, rootField, targetField))
+    cmds.button(label = 'See Root Pts', c = ft.partial(selTgts, targetField))
+    cmds.button(label = 'See Tgt Pts', c = ft.partial(selRoots, rootField))
+    
+    #shows window
+    cmds.showWindow("mainUI")    
+main()   
