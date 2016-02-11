@@ -179,7 +179,6 @@ def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
 	cmds.select(clear=True)
 	cmds.select(blendshape[0]+".vtx[*]")
 	AllPBlend = cmds.ls(sl=1, fl=True)
-	print "shape selected"
 
 	#vertex list original source mesh
 	O = getVtxPos( source )
@@ -190,14 +189,12 @@ def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
 	# matrix of motion vectors from source to blendshape vertex positions
 	MV = numpy.matrix(B)-numpy.matrix(O) 
 	MV = numpy.asmatrix(MV)
-	print "found motion vectors"
     
 	#-------------------------ROTATION-----------------------------#
 
 	N0 = normalMatrix(AllP0) # normal matrix for source
 
 	N1 = normalMatrix(AllPDef) # normal matrix for deformed source
-	print "got normal matrices"
 	#------------
 
 	# list of motion vector rotations
@@ -315,64 +312,7 @@ ind = 0
 for i in range(0,n):
     cmds.move(float(P02[i][ind]), float(P02[i][ind+1]), float(P02[i][ind+2]), AllPDef[i])
 
-#------------MOTION VECTOR TRANSFER-------------#
-
-# create array of all vertices of the blendshape
-cmds.select("blendshape1")
-blendshape = cmds.ls(sl=1)
-cmds.move(0,0,0, blendshape[0])
-cmds.select(clear=True)
-cmds.select(blendshape[0]+".vtx[*]")
-AllPBlend = cmds.ls(sl=1, fl=True)
-
-#vertex list original source mesh
-O = getVtxPos( sourceName[0] )
-
-#vertex list source mesh blendshape
-B = getVtxPos( blendshape[0] )
-
-# matrix of motion vectors from source to blendshape vertex positions
-MV = numpy.matrix(B)-numpy.matrix(O) 
-MV = numpy.asmatrix(MV)
-
-#-------------------------ROTATION-----------------------------#
-
-N0 = normalMatrix(AllP0) # normal matrix for source
-
-N1 = normalMatrix(AllPDef) # normal matrix for deformed source
-    
-#------------
-
-# list of motion vector rotations
-R = []
-# find local source vertex coordinate systems before deformation, then after deformation
-for i in range(0, len(P0)):
-    localOrig = findLocal(AllP0[i], N0[i])
-    localDef = findLocal(AllPDef[i], N1[i])
-    ODR = findRotationMatrix(localOrig, localDef)
-    R.append(ODR)
-R = numpy.asarray(R)
-    
-#--------------------------MAGNITUDE---------------------------#
-    
-S = []
-for i in AllP0:	
-	S.append(findScaleMatrix(i, AllP0, P0, R))
-S = numpy.asarray(S)
-
-#--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
-
-# duplicate deformed source to make blendshape
-cmds.duplicate("sourceDeformed", n = "targetBlendshape")
-cmds.select(clear=True)
-cmds.select("targetBlendshape.vtx[*]")
-defBlend = cmds.ls(sl=1, fl=True)
-
-for i in range(0,n):
-    MVdef = S[i]*R[i]*numpy.transpose(MV[i])
-    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
-    #MVnew.append(MVdef)
     
 blendshapes = ["Blendshape1", "Blendshape2"]
 for i in blendshapes:
-    createBlendshape(sourceName[0], "Blendshape2", AllP0, AllPDef, "targetBlendshape2")
+    createBlendshape(sourceName[0], i, AllP0, AllPDef, "target"+i)
