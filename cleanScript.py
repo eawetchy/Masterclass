@@ -149,7 +149,7 @@ def findScaleMatrix(point, allPoints, allPointPos, rotationMat):
 	# answer by user senderle
 	for i in vList:
 		temp = re.findall('\d+', i)
-		vInd.append(int(temp[1]))	
+		vInd.append(int(temp[len(temp)-1]))	
 	
 	vertPos2 = []
 	for i in vInd:
