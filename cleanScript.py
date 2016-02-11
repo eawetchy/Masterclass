@@ -1,5 +1,6 @@
 import maya.cmds as cmds
 import numpy
+import re
 
 def RBFbasis (r,s):
     R = (r**2 + 1)**0.5
@@ -84,6 +85,23 @@ def findLocal(point, normal):
     lZ = lZ/lenZ
     local = numpy.matrix([lX, lY, lZ])   
     return local
+
+def findRotationMatrix(localOrig, localDef):
+    
+    world = numpy.matrix([ [ 1.0, 0.0, 0.0], [ 0.0, 1.0, 0.0 ], [ 0.0, 0.0, 1.0 ] ])
+    
+    owR = numpy.zeros((3,3)) # rotation from a local source vertex coordinate axes to the world coordinate axes
+    for i in range(0,2):
+        for j in range(0,2):
+            owR[i][j] = numpy.dot(world[i], numpy.transpose(localOrig[j]))
+
+    wdR = numpy.zeros((3,3)) # rotation from world axes to the local deformed vertex axes vertex axes
+    for i in range(0,2):
+        for j in range(0,2):
+            wdR[i][j] = numpy.dot(localDef[i], numpy.transpose(world[j]))
+        
+    odR = wdR * owR 
+    return odR
     
 def getExtremePoint( dir, high, vertexList ):
     if dir == "x":
@@ -105,7 +123,7 @@ def getExtremePoint( dir, high, vertexList ):
                 extremeValue = vertexList[i][val]
                 vertIdx = i  
     return extremeValue
-
+    
 def findScaleMatrix(point, allPoints, allPointPos, rotationMat):
 		# find faces sharing a vertex
 	faces = cmds.polyListComponentConversion( point, fv=True, tf=True )
@@ -150,13 +168,76 @@ def findScaleMatrix(point, allPoints, allPointPos, rotationMat):
 	S = numpy.matrix([[s[0],0,0],[0,s[1],0],[0,0,s[2]]])
 	
 	return S
+	
+def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
+	#------------MOTION VECTOR TRANSFER-------------#
+
+	# create array of all vertices of the blendshape
+	cmds.select(blendshape)
+	blendshape = cmds.ls(sl=1)
+	cmds.move(0,0,0, blendshape[0])
+	cmds.select(clear=True)
+	cmds.select(blendshape[0]+".vtx[*]")
+	AllPBlend = cmds.ls(sl=1, fl=True)
+	print "shape selected"
+
+	#vertex list original source mesh
+	O = getVtxPos( source )
+
+	#vertex list source mesh blendshape
+	B = getVtxPos( blendshape[0] )
+
+	# matrix of motion vectors from source to blendshape vertex positions
+	MV = numpy.matrix(B)-numpy.matrix(O) 
+	MV = numpy.asmatrix(MV)
+	print "found motion vectors"
     
+	#-------------------------ROTATION-----------------------------#
+
+	N0 = normalMatrix(AllP0) # normal matrix for source
+
+	N1 = normalMatrix(AllPDef) # normal matrix for deformed source
+	print "got normal matrices"
+	#------------
+
+	# list of motion vector rotations
+	R = []
+	# find local source vertex coordinate systems before deformation, then after deformation
+	for i in range(0, len(P0)):
+		localOrig = findLocal(AllP0[i], N0[i])
+		localDef = findLocal(AllPDef[i], N1[i])
+		ODR = findRotationMatrix(localOrig, localDef)
+		R.append(ODR)
+	R = numpy.asarray(R)
+		
+	#--------------------------MAGNITUDE---------------------------#
+		
+	S = []
+	for i in AllP0:	
+		S.append(findScaleMatrix(i, AllP0, P0, R))
+	S = numpy.asarray(S)
+
+	#--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
+
+	# duplicate deformed source to make blendshape
+	cmds.duplicate("sourceDeformed", n = blendName)
+	cmds.select(clear=True)
+	cmds.select(blendName+".vtx[*]")
+	defBlend = cmds.ls(sl=1, fl=True)
+
+	for i in range(0,n):
+		MVdef = S[i]*R[i]*numpy.transpose(MV[i])
+		cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+		
+		
 #------------------------------------------------------------------------------#
 
 cmds.select("source1")
 sourceName = cmds.ls(sl=1)
+cmds.move(0,0,0,sourceName[0])
 cmds.select("target")
 targetName = cmds.ls(sl=1)
+cmds.move(0,0,0,targetName[0])
 
 
 # turn on "Track selection order" in preferences > selection!
@@ -228,10 +309,7 @@ cmds.duplicate(sourceName[0], n = "sourceDeformed")
 cmds.select(clear=True)
 cmds.select("sourceDeformed.vtx[*]")
 AllPDef = cmds.ls(sl=1, fl=True)
-P2 = []
-for i in AllPDef:
-    P2.append( cmds.pointPosition(i) )
-P2 = numpy.matrix(P2)
+
 
 ind = 0
 for i in range(0,n):
@@ -255,6 +333,7 @@ B = getVtxPos( blendshape[0] )
 
 # matrix of motion vectors from source to blendshape vertex positions
 MV = numpy.matrix(B)-numpy.matrix(O) 
+MV = numpy.asmatrix(MV)
 
 #-------------------------ROTATION-----------------------------#
 
@@ -272,11 +351,14 @@ for i in range(0, len(P0)):
     localDef = findLocal(AllPDef[i], N1[i])
     ODR = findRotationMatrix(localOrig, localDef)
     R.append(ODR)
+R = numpy.asarray(R)
     
 #--------------------------MAGNITUDE---------------------------#
+    
 S = []
 for i in AllP0:	
 	S.append(findScaleMatrix(i, AllP0, P0, R))
+S = numpy.asarray(S)
 
 #--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
 
@@ -286,9 +368,11 @@ cmds.select(clear=True)
 cmds.select("targetBlendshape.vtx[*]")
 defBlend = cmds.ls(sl=1, fl=True)
 
-MVnew = []
-
 for i in range(0,n):
     MVdef = S[i]*R[i]*numpy.transpose(MV[i])
     cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
-    MVnew.append(MVdef)
+    #MVnew.append(MVdef)
+    
+blendshapes = ["Blendshape1", "Blendshape2"]
+for i in blendshapes:
+    createBlendshape(sourceName[0], "Blendshape2", AllP0, AllPDef, "targetBlendshape2")
