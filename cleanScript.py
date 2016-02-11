@@ -280,22 +280,15 @@ for i in AllP0:
 
 #--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
 
-T=S*odR
-
-mvNew = T * mv
-
 # duplicate deformed source to make blendshape
 cmds.duplicate("sourceDeformed", n = "targetBlendshape")
 cmds.select(clear=True)
 cmds.select("targetBlendshape.vtx[*]")
 defBlend = cmds.ls(sl=1, fl=True)
 
-defMV = []
+MVnew = []
 
 for i in range(0,n):
-    MVdef = R[i]*numpy.transpose(MV[i])
+    MVdef = S[i]*R[i]*numpy.transpose(MV[i])
     cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
-    defMV.append(MVdef)
-
-
-P0rotated = R[0] * numpy.transpose(P0[0])
+    MVnew.append(MVdef)
