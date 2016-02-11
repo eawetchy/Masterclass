@@ -223,20 +223,9 @@ for i in range(0, len(P0)):
     localDef = findLocal(AllPDef[i], N1[i])
     ODR = findRotationMatrix(localOrig, localDef)
     R.append(ODR)
-
-# duplicate deformed source to make blendshape
-cmds.duplicate("sourceDeformed", n = "targetBlendshape")
-cmds.select(clear=True)
-cmds.select("targetBlendshape.vtx[*]")
-defBlend = cmds.ls(sl=1, fl=True)
-
-for i in range(0,n):
-    MVdef = R[i]*numpy.transpose(MV[i])
-    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
     
+#--------------------------MAGNITUDE---------------------------#
     
-#-------------MOTION VECTOR SIZE ADJUSTMENT----------------#    
-
 # find faces sharing a vertex
 faces = cmds.polyListComponentConversion( AllP0[0], fv=True, tf=True )
 faces = cmds.ls( faces, flatten=True )
@@ -253,13 +242,55 @@ BB.append(getExtremePoint("y", False, vertPos))
 BB.append(getExtremePoint("y", True, vertPos))
 BB.append(getExtremePoint("z", False, vertPos))
 BB.append(getExtremePoint("z", True, vertPos))
+sizeBB = numpy.array([BB[1] - BB[0], BB[3] - BB[2], BB[5] - BB[4]])
 
-vertPos2 = []
+
 for i in range(0, len(vertPos)):
-    vertPos2.append(R[???] * numpy.transpose(P0
+    vertPos2.append(R[vList] * numpy.transpose(P0
+
+
+vInd = []
+# extracting the vertex indices in vList adjusted from http://stackoverflow.com/questions/10365225/extract-digits-in-a-simple-way-from-a-python-string
+# answer by user senderle
+for i in vList:
+    temp = re.findall('\d+', i)
+    vInd.append(int(temp[1]))
     
- #!!!
- [int(s) for s in str.split() if s.isdigit()]
- #!!!
+vertPos2 = []
+for i in vInd:
+    vertPos2.append(numpy.asarray(R[i] * numpy.transpose(P0[i])))
+    
+#find bounding box of deformed vertices
+BB2 = []
+BB2.append(float(getExtremePoint("x", False, vertPos2)))
+BB2.append(float(getExtremePoint("x", True, vertPos2)))
+BB2.append(float(getExtremePoint("y", False, vertPos2)))
+BB2.append(float(getExtremePoint("y", True, vertPos2)))
+BB2.append(float(getExtremePoint("z", False, vertPos2)))
+BB2.append(float(getExtremePoint("z", True, vertPos2)))
+sizeBB2 = numpy.array([BB2[1] - BB2[0], BB2[3] - BB2[2], BB2[5] - BB2[4]])
+
+s = sizeBB2/sizeBB
+S = numpy.matrix([[s[0],0,0],[0,s[1],0],[0,0,s[2]]])
+
+#--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
+
+T=S*odR
+
+mvNew = T * mv
+
+# duplicate deformed source to make blendshape
+cmds.duplicate("sourceDeformed", n = "targetBlendshape")
+cmds.select(clear=True)
+cmds.select("targetBlendshape.vtx[*]")
+defBlend = cmds.ls(sl=1, fl=True)
+
+defMV = []
+
+for i in range(0,n):
+    MVdef = R[i]*numpy.transpose(MV[i])
+    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+    defMV.append(MVdef)
+
 
 P0rotated = R[0] * numpy.transpose(P0[0])
