@@ -84,23 +84,72 @@ def findLocal(point, normal):
     lZ = lZ/lenZ
     local = numpy.matrix([lX, lY, lZ])   
     return local
-
-def findRotationMatrix(localOrig, localDef):
     
-    world = numpy.matrix([ [ 1.0, 0.0, 0.0], [ 0.0, 1.0, 0.0 ], [ 0.0, 0.0, 1.0 ] ])
-    
-    owR = numpy.zeros((3,3)) # rotation from a local source vertex coordinate axes to the world coordinate axes
-    for i in range(0,2):
-        for j in range(0,2):
-            owR[i][j] = numpy.dot(world[i], numpy.transpose(localOrig[j]))
+def getExtremePoint( dir, high, vertexList ):
+    if dir == "x":
+        val = 0  
+    if dir == "y":
+        val = 1
+    if dir == "z":
+        val = 2    
+    vertIdx = 0
+    extremeValue = vertexList[0][val]   
+    if high == True:
+        for i in range(0, len(vertexList)):
+            if vertexList[i][val] > extremeValue:
+                extremeValue = vertexList[i][val]
+                vertIdx = i
+    else:
+        for i in range(0, len(vertexList)):
+            if vertexList[i][val] < extremeValue:
+                extremeValue = vertexList[i][val]
+                vertIdx = i  
+    return extremeValue
 
-    wdR = numpy.zeros((3,3)) # rotation from world axes to the local deformed vertex axes vertex axes
-    for i in range(0,2):
-        for j in range(0,2):
-            wdR[i][j] = numpy.dot(localDef[i], numpy.transpose(world[j]))
-        
-    odR = wdR * owR 
-    return odR
+def findScaleMatrix(point, allPoints, allPointPos, rotationMat):
+		# find faces sharing a vertex
+	faces = cmds.polyListComponentConversion( point, fv=True, tf=True )
+	faces = cmds.ls( faces, flatten=True )
+	vList = cmds.polyListComponentConversion( faces, ff=True, tv=True )
+	vList = cmds.ls( vList, flatten=True )
+	vertPos = []
+	for i in range(0, len(vList)):
+		vertPos.append(cmds.pointPosition(vList[i], w=True))
+
+	#find bounding box of vertices
+	BB = []
+	BB.append(getExtremePoint("x", False, vertPos))
+	BB.append(getExtremePoint("x", True, vertPos))
+	BB.append(getExtremePoint("y", False, vertPos))
+	BB.append(getExtremePoint("y", True, vertPos))
+	BB.append(getExtremePoint("z", False, vertPos))
+	BB.append(getExtremePoint("z", True, vertPos))
+	sizeBB = numpy.array([BB[1] - BB[0], BB[3] - BB[2], BB[5] - BB[4]])
+
+	vInd = []
+	# extracting the vertex indices in vList adjusted from http://stackoverflow.com/questions/10365225/extract-digits-in-a-simple-way-from-a-python-string
+	# answer by user senderle
+	for i in vList:
+		temp = re.findall('\d+', i)
+		vInd.append(int(temp[1]))	
+	
+	vertPos2 = []
+	for i in vInd:
+		vertPos2.append(numpy.asarray(rotationMat[i] * numpy.transpose(allPointPos[i])))
+	#find bounding box of deformed vertices
+	BB2 = []
+	BB2.append(float(getExtremePoint("x", False, vertPos2)))
+	BB2.append(float(getExtremePoint("x", True, vertPos2)))
+	BB2.append(float(getExtremePoint("y", False, vertPos2)))
+	BB2.append(float(getExtremePoint("y", True, vertPos2)))
+	BB2.append(float(getExtremePoint("z", False, vertPos2)))
+	BB2.append(float(getExtremePoint("z", True, vertPos2)))
+	sizeBB2 = numpy.array([BB2[1] - BB2[0], BB2[3] - BB2[2], BB2[5] - BB2[4]])
+
+	s = sizeBB2/sizeBB
+	S = numpy.matrix([[s[0],0,0],[0,s[1],0],[0,0,s[2]]])
+	
+	return S
     
 #------------------------------------------------------------------------------#
 
@@ -225,53 +274,9 @@ for i in range(0, len(P0)):
     R.append(ODR)
     
 #--------------------------MAGNITUDE---------------------------#
-    
-# find faces sharing a vertex
-faces = cmds.polyListComponentConversion( AllP0[0], fv=True, tf=True )
-faces = cmds.ls( faces, flatten=True )
-vList = cmds.polyListComponentConversion( faces, ff=True, tv=True )
-vList = cmds.ls( vList, flatten=True )
-vertPos = []
-for i in range(0, len(vList)):
-    vertPos.append(cmds.pointPosition(vList[i], w=True))
-#find bounding box of vertices
-BB = []
-BB.append(getExtremePoint("x", False, vertPos))
-BB.append(getExtremePoint("x", True, vertPos))
-BB.append(getExtremePoint("y", False, vertPos))
-BB.append(getExtremePoint("y", True, vertPos))
-BB.append(getExtremePoint("z", False, vertPos))
-BB.append(getExtremePoint("z", True, vertPos))
-sizeBB = numpy.array([BB[1] - BB[0], BB[3] - BB[2], BB[5] - BB[4]])
-
-
-for i in range(0, len(vertPos)):
-    vertPos2.append(R[vList] * numpy.transpose(P0
-
-
-vInd = []
-# extracting the vertex indices in vList adjusted from http://stackoverflow.com/questions/10365225/extract-digits-in-a-simple-way-from-a-python-string
-# answer by user senderle
-for i in vList:
-    temp = re.findall('\d+', i)
-    vInd.append(int(temp[1]))
-    
-vertPos2 = []
-for i in vInd:
-    vertPos2.append(numpy.asarray(R[i] * numpy.transpose(P0[i])))
-    
-#find bounding box of deformed vertices
-BB2 = []
-BB2.append(float(getExtremePoint("x", False, vertPos2)))
-BB2.append(float(getExtremePoint("x", True, vertPos2)))
-BB2.append(float(getExtremePoint("y", False, vertPos2)))
-BB2.append(float(getExtremePoint("y", True, vertPos2)))
-BB2.append(float(getExtremePoint("z", False, vertPos2)))
-BB2.append(float(getExtremePoint("z", True, vertPos2)))
-sizeBB2 = numpy.array([BB2[1] - BB2[0], BB2[3] - BB2[2], BB2[5] - BB2[4]])
-
-s = sizeBB2/sizeBB
-S = numpy.matrix([[s[0],0,0],[0,s[1],0],[0,0,s[2]]])
+S = []
+for i in AllP0:	
+	S.append(findScaleMatrix(i, AllP0, P0, R))
 
 #--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
 
