@@ -71,13 +71,11 @@ for i in nose:
     obj = i.split("'")[0]
     temp = re.findall('\d+', obj)
     noseInd.append(int(temp[len(temp)-1]))
-
 		
-for i in nose:
-    noseVts.append( cmds.pointPosition(i, w=True) )
-    noseVts[i].append
-
-
+for i in range(0,len(nose)):
+    noseVts.append( cmds.pointPosition(nose[i], w=True) )
+    noseVts[i].append(i)
+    noseVts[i].append(noseInd[i])
     
 noseTip = getExtremePoint("z", True, noseVts, nose)
 top = getExtremePoint("y", True, noseVts, nose)
@@ -92,28 +90,21 @@ def findLeftNose():
     bottom = getExtremePoint("y", False, noseVts, nose) # lowest selected vertex
     cmds.select(left[0], right[0],bottom[0], noseTip[0])
     poss = []
-from operator import itemgetter
+
 for i in range(0, len(nose)):
     if (bottom[1] < noseVts[i][1] and noseVts[i][1] < noseVts[noseTip[2]][1]+(noseVts[noseTip[2]][1]-bottom[1])):
         if (left[1] < noseVts[i][0] and noseVts[i][0] < noseVts[noseTip[2]][0]):
-            poss.append(nose[i]) 
+            poss.append(nose[i])
+    
     normals = (normalMatrix(nose))
     normals = normals.tolist()
     # highest vertex with biggest angle between normals
-    posSort = sorted(noseVts, key=lambda y: y[1], reverse=True)
-    
+    posSort = sorted(poss, key=lambda y: y[1], reverse=True)
+    cmds.select(nose[posSort[0][3]])
     
     cmds.select(poss)
-            
-            
-            
-        bottom[1] < leftNoseY < noseVts[noseTip[2]][1]+(noseVts[noseTip[2]][1]-bottom[1])
-        left[1] < leftNoseX < noseVts[noseTip[2]][0]
-    
-    
-    
-    
 
-
-
+ #       bottom[1] < leftNoseY < noseVts[noseTip[2]][1]+(noseVts[noseTip[2]][1]-bottom[1])
+#        left[1] < leftNoseX < noseVts[noseTip[2]][0]
+    
 cmds.inViewMessage( amg='In-view message <hl>test</hl>.', pos='midCenter', fade=True )
