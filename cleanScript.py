@@ -4,6 +4,7 @@ import re
 
 def RBFbasis (r,s):
     R = (r**2 + 1)**0.5
+    #R = (numpy.exp(-r**2))
     return R 
     
 def rbfeval(C, W, P):
@@ -22,30 +23,34 @@ def getVtxPos( shapeNode ) :
 	vtxWorldPosition = []    
 	
 	vtxIndexList = cmds.getAttr( shapeNode+".vrts", multiIndices=True )
- 
+
 	for i in vtxIndexList :
 		curPointPosition = cmds.xform( str(shapeNode)+".pnts["+str(i)+"]", query=True, translation=True, worldSpace=True )    # [1.1269192869360154, 4.5408735275268555, 1.3387055339628269]
 		vtxWorldPosition.append( curPointPosition )
  
 	return vtxWorldPosition
 	
+def getVertexNormal(P):
+    cmds.select(P)
+    n = cmds.polyNormalPerVertex( query=True, xyz=True )
+    num = len(n)/3
+    x = 0
+    y = 0
+    z = 0
+    for j in range (0,num):
+        x += n[0+3*j]
+        y += n[1+3*j]
+        z += n[2+3*j]
+        vn = numpy.array([[x/num, y/num, z/num]])
+        length = numpy.linalg.norm(vn)
+        vn = vn/length
+    return vn
+	
 # will return a matrix of vertex normals, calculated by averaging the surrounding face normals
 def normalMatrix(P):
     N = numpy.zeros((len(P),3)) # normal matrix for source
     for i in range(0, len(P)):
-        cmds.select(P[i])
-        n = cmds.polyNormalPerVertex( query=True, xyz=True )
-        num = len(n)/3
-        x = 0
-        y = 0
-        z = 0
-        for j in range(0, num):
-            x += n[0+3*j]
-            y += n[1+3*j]
-            z += n[2+3*j]
-            vn = numpy.matrix([[x/num, y/num, z/num]])
-            length = numpy.linalg.norm(vn)
-            vn = vn/length
+        vn = getVertexNormal(P[i])
         N[i] = vn
     return N
     
@@ -58,12 +63,9 @@ def findLocal(point, normal):
     edges = cmds.ls( edges, flatten=True )
     vList = cmds.polyListComponentConversion( edges, fe=True, tv=True )
     vList = cmds.ls( vList, flatten=True )
-    
+    vList.remove(point)
     # find end point of the edge 
-    if (point == vList[0]):
-        q = cmds.pointPosition(vList[1], w=True)
-    else:
-        q = cmds.pointPosition(vList[0], w=True)
+    q = cmds.pointPosition(vList[0], w=True)
 
     # projected onto a plane given by the vertex we're examining and the determined vertex normal 
     p = cmds.pointPosition(point) # plane point 
@@ -93,12 +95,12 @@ def findRotationMatrix(localOrig, localDef):
     owR = numpy.zeros((3,3)) # rotation from a local source vertex coordinate axes to the world coordinate axes
     for i in range(0,2):
         for j in range(0,2):
-            owR[i][j] = numpy.dot(world[i], numpy.transpose(localOrig[j]))
+            owR[i][j] = numpy.dot(world[j], numpy.transpose(localOrig[i]))
 
     wdR = numpy.zeros((3,3)) # rotation from world axes to the local deformed vertex axes vertex axes
     for i in range(0,2):
         for j in range(0,2):
-            wdR[i][j] = numpy.dot(localDef[i], numpy.transpose(world[j]))
+            wdR[i][j] = numpy.dot(localDef[j], numpy.transpose(world[i]))
         
     odR = wdR * owR 
     return odR
@@ -223,10 +225,18 @@ def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
 	defBlend = cmds.ls(sl=1, fl=True)
 
 	for i in range(0,n):
-		MVdef = S[i]*R[i]*numpy.transpose(MV[i])
-		cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+	    #cmds.move(float(MV[i, 0]), float(MV[i, 1]), float(MV[i, 2]), defBlend[i], r=True)
+	    MVdef = R[i]*numpy.transpose(MV[i])
+	    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+	    #MVdef = S[i]*R[i]*numpy.transpose(MV[i])
+		#cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
 		
-		
+def pointPositions(AllP):
+    P0 = []
+    for j in AllP:
+        P0.append( cmds.pointPosition(j, w=True) )
+    P0 = numpy.matrix(P0)    
+    return P0
 #------------------------------------------------------------------------------#
 
 cmds.select("source1")
@@ -239,16 +249,12 @@ cmds.move(0,0,0,targetName[0])
 
 # turn on "Track selection order" in preferences > selection!
 cmds.select(clear=True)
-SKP = [194, 254, 381, 380, 189, 199, 184]
-# key points on bruce
-#SKP = [814, 820, 827, 7265, 6415, 2361, 2401, 8133, 5703, 7644, 3592, 2206, 4084, 5181, 1126, 785, 4212, 5612, 6769, 2715, 7841, 5740, 1686, 3787, 6905, 2672, 1969, 861, 6010, 1, 4770, 437, 498, 19]
+
 for i in SKP:
     cmds.select(sourceName[0]+".vtx["+str(i)+"]", add = True)
 SelP0 = cmds.ls(fl=True, os=True)
 cmds.select(clear=True)
-TKP = [2986, 3626, 381, 380, 2949, 3347, 2911]
-# key points on emily
-#TKP = [11641, 10918, 2181, 20478, 20262, 18333, 18565, 21213, 22000, 200141, 2747, 19498, 5734, 11213, 8902, 11923, 1594, 15871, 23267, 4267, 15309, 14273, 5206, 11733, 22078, 13006, 14203, 16302, 22980, 6646, 17078, 14545, 14567, 8184]
+
 for i in TKP:
     cmds.select(targetName[0]+".vtx["+str(i)+"]", add = True)
 SelP1 = cmds.ls(fl=True, os=True)
@@ -256,62 +262,69 @@ if (len(SKP) != len(TKP)):
     print "Number of source and target key points don't match!"
     quit()
 
-cmds.select(clear=True)
-cmds.select(sourceName[0]+".vtx[*]")
-AllP0 = cmds.ls(sl=1, fl=True)
-cmds.select(clear=True)
-cmds.select(targetName[0]+".vtx[*]")
-AllP1 = cmds.ls(sl=1, fl=True)
+
+def matchTarget(source, target, SelP0, SelP1):
+	cmds.move(0,0,0,source)
+	cmds.move(0,0,0,target)
+	cmds.select(clear=True)
+	cmds.select(source+".vtx[*]")
+	AllP0 = cmds.ls(sl=1, fl=True)
+	cmds.select(clear=True)
+	cmds.select(target+".vtx[*]")
+	AllP1 = cmds.ls(sl=1, fl=True)
 
 
-#----------------#
+	#----------------#
 
-KP0 = []
-KP1 = []
-for i in SelP0:
-    KP0.append( cmds.pointPosition(i, w=True) )
-for j in SelP1:
-    KP1.append( cmds.pointPosition(j, w=True) )
-KP0 = numpy.matrix(KP0)
-KP1 = numpy.matrix(KP1)
-
-
-P0 = []
-P1 = []
-for j in AllP0:
-    P0.append( cmds.pointPosition(j, w=True) )
-for k in AllP1:
-    P1.append( cmds.pointPosition(k, w=True) )
-P0 = numpy.matrix(P0)
-P1 = numpy.matrix(P1)
+	KP0 = []
+	KP1 = []
+	for i in SelP0:
+		KP0.append( cmds.pointPosition(i, w=True) )
+	for j in SelP1:
+		KP1.append( cmds.pointPosition(j, w=True) )
+	KP0 = numpy.matrix(KP0)
+	KP1 = numpy.matrix(KP1)
+	if (len(KP0) != len(KP1)):
+	    print "Number of source and target key points does not match!"
+	    quit()
 
 
-#------------
-  
-n = len(P0)
-m = len(KP1)
-    
-H = numpy.zeros((m,m))
-for i in range(0, m):
-    for j in range(0, m):
-        H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j]), 1) # closestPoint( KP0[j], KP0 ) )
-
-H = numpy.asmatrix(H)
-w = numpy.linalg.solve(H, KP1)
-
-P02  = rbfeval(KP0, w, P0)
-
-# duplicate source, then apply the transformation
-cmds.duplicate(sourceName[0], n = "sourceDeformed")
-cmds.select(clear=True)
-cmds.select("sourceDeformed.vtx[*]")
-AllPDef = cmds.ls(sl=1, fl=True)
+	P0 = []
+	P1 = []
+	for j in AllP0:
+		P0.append( cmds.pointPosition(j, w=True) )
+	for k in AllP1:
+		P1.append( cmds.pointPosition(k, w=True) )
+	P0 = numpy.matrix(P0)
+	P1 = numpy.matrix(P1)
 
 
-ind = 0
-for i in range(0,n):
-    cmds.move(float(P02[i][ind]), float(P02[i][ind+1]), float(P02[i][ind+2]), AllPDef[i])
+	#------------
+	  
+	n = len(P0)
+	m = len(KP1)
+		
+	H = numpy.zeros((m,m))
+	for i in range(0, m):
+		for j in range(0, m):
+			H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j]), 1) # closestPoint( KP0[j], KP0 ) )
 
+	H = numpy.asmatrix(H)
+	w = numpy.linalg.solve(H, KP1)
+
+	P02  = rbfeval(KP0, w, P0)
+
+	# duplicate source, then apply the transformation
+	cmds.duplicate(source, n = "sourceDeformed")
+	cmds.move(0,0,0, "sourceDeformed")
+	cmds.select(clear=True)
+	cmds.select("sourceDeformed.vtx[*]")
+	AllPDef = cmds.ls(sl=1, fl=True)
+
+
+	ind = 0
+	for i in range(0,n):
+		cmds.move(float(P02[i][ind]), float(P02[i][ind+1]), float(P02[i][ind+2]), AllPDef[i])
     
 blendshapes = ["Blendshape1", "Blendshape2"]
 for i in blendshapes:
