@@ -1,6 +1,8 @@
 import maya.cmds as cmds
 import numpy
 import re
+import functools as ft
+import copy
 
 def RBFbasis (r,s):
     R = (r**2 + 1)**0.5
@@ -171,22 +173,77 @@ def findScaleMatrix(point, allPoints, allPointPos, rotationMat):
 	
 	return S
 	
-def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
-	#------------MOTION VECTOR TRANSFER-------------#
-
-	# create array of all vertices of the blendshape
-	cmds.select(blendshape)
-	blendshape = cmds.ls(sl=1)
-	cmds.move(0,0,0, blendshape[0])
+def pointPositions(AllP):
+    P0 = []
+    for j in AllP:
+        P0.append( cmds.pointPosition(j, w=True) )
+    P0 = numpy.matrix(P0)    
+    return P0
+	
+def matchTarget(source, target, SelP0, SelP1):
+	cmds.move(0,0,0,source)
+	cmds.move(0,0,0,target)
 	cmds.select(clear=True)
-	cmds.select(blendshape[0]+".vtx[*]")
+	cmds.select(source+".vtx[*]")
+	AllP0 = cmds.ls(sl=1, fl=True)
+	cmds.select(clear=True)
+	cmds.select(target+".vtx[*]")
+	AllP1 = cmds.ls(sl=1, fl=True)
+	#----------------#
+
+	KP0 = pointPositions(SelP0)
+	KP1 = pointPositions(SelP1)
+	if (len(KP0) != len(KP1)):
+	    print "Number of source and target key points does not match!"
+	    quit()
+	P0 = pointPositions(AllP0)
+	P1 = pointPositions(AllP1)
+	#------------
+	  
+	n = len(P0)
+	m = len(KP1)
+		
+	H = numpy.zeros((m,m))
+	for i in range(0, m):
+		for j in range(0, m):
+			H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j]), 1) # closestPoint( KP0[j], KP0 ) )
+
+	H = numpy.asmatrix(H)
+	w = numpy.linalg.solve(H, KP1)
+
+	P02  = rbfeval(KP0, w, P0)
+
+	# duplicate source, then apply the transformation
+	cmds.duplicate(source, n = "sourceDeformed")
+	cmds.move(0,0,0, "sourceDeformed")
+	cmds.select(clear=True)
+	cmds.select("sourceDeformed.vtx[*]")
+	AllPDef = cmds.ls(sl=1, fl=True)
+
+
+	ind = 0
+	for i in range(0,n):
+		cmds.move(float(P02[i][ind]), float(P02[i][ind+1]), float(P02[i][ind+2]), AllPDef[i])
+	
+def createBlendshape(source, blendshape, AllP0, AllPDef):
+	#------------MOTION VECTOR TRANSFER-------------#
+	print "Good Evening, Madam"
+	blendName = "target" + blendshape
+	print "blendName = ", blendName
+	# create array of all vertices of the blendshape
+	#cmds.select(blendshape)
+	#blendshape = cmds.ls(sl=1)
+	print blendshape
+	cmds.move(0,0,0, blendshape)
+	cmds.select(clear=True)
+	cmds.select(blendshape+".vtx[*]")
 	AllPBlend = cmds.ls(sl=1, fl=True)
 
 	#vertex list original source mesh
 	O = getVtxPos( source )
 
 	#vertex list source mesh blendshape
-	B = getVtxPos( blendshape[0] )
+	B = getVtxPos( blendshape )
 
 	# matrix of motion vectors from source to blendshape vertex positions
 	MV = numpy.matrix(B)-numpy.matrix(O) 
@@ -225,107 +282,102 @@ def createBlendshape(source, blendshape, AllP0, AllPDef, blendName):
 	defBlend = cmds.ls(sl=1, fl=True)
 
 	for i in range(0,n):
-	    #cmds.move(float(MV[i, 0]), float(MV[i, 1]), float(MV[i, 2]), defBlend[i], r=True)
-	    MVdef = R[i]*numpy.transpose(MV[i])
-	    cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
+	    cmds.move(float(MV[i, 0]), float(MV[i, 1]), float(MV[i, 2]), defBlend[i], r=True)
+	    #MVdef = R[i]*numpy.transpose(MV[i])
+	    #cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
 	    #MVdef = S[i]*R[i]*numpy.transpose(MV[i])
 		#cmds.move(float(MVdef[0]), float(MVdef[1]), float(MVdef[2]), defBlend[i], r=True)
-		
-def pointPositions(AllP):
-    P0 = []
-    for j in AllP:
-        P0.append( cmds.pointPosition(j, w=True) )
-    P0 = numpy.matrix(P0)    
-    return P0
-#------------------------------------------------------------------------------#
-
-cmds.select("source1")
-sourceName = cmds.ls(sl=1)
-cmds.move(0,0,0,sourceName[0])
-cmds.select("target")
-targetName = cmds.ls(sl=1)
-cmds.move(0,0,0,targetName[0])
-
-
-# turn on "Track selection order" in preferences > selection!
-cmds.select(clear=True)
-
-for i in SKP:
-    cmds.select(sourceName[0]+".vtx["+str(i)+"]", add = True)
-SelP0 = cmds.ls(fl=True, os=True)
-cmds.select(clear=True)
-
-for i in TKP:
-    cmds.select(targetName[0]+".vtx["+str(i)+"]", add = True)
-SelP1 = cmds.ls(fl=True, os=True)
-if (len(SKP) != len(TKP)):
-    print "Number of source and target key points don't match!"
-    quit()
-
-
-def matchTarget(source, target, SelP0, SelP1):
-	cmds.move(0,0,0,source)
-	cmds.move(0,0,0,target)
-	cmds.select(clear=True)
-	cmds.select(source+".vtx[*]")
-	AllP0 = cmds.ls(sl=1, fl=True)
-	cmds.select(clear=True)
-	cmds.select(target+".vtx[*]")
-	AllP1 = cmds.ls(sl=1, fl=True)
-
-
-	#----------------#
-
-	KP0 = []
-	KP1 = []
-	for i in SelP0:
-		KP0.append( cmds.pointPosition(i, w=True) )
-	for j in SelP1:
-		KP1.append( cmds.pointPosition(j, w=True) )
-	KP0 = numpy.matrix(KP0)
-	KP1 = numpy.matrix(KP1)
-	if (len(KP0) != len(KP1)):
-	    print "Number of source and target key points does not match!"
-	    quit()
-
-
-	P0 = []
-	P1 = []
-	for j in AllP0:
-		P0.append( cmds.pointPosition(j, w=True) )
-	for k in AllP1:
-		P1.append( cmds.pointPosition(k, w=True) )
-	P0 = numpy.matrix(P0)
-	P1 = numpy.matrix(P1)
-
-
-	#------------
-	  
-	n = len(P0)
-	m = len(KP1)
-		
-	H = numpy.zeros((m,m))
-	for i in range(0, m):
-		for j in range(0, m):
-			H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j]), 1) # closestPoint( KP0[j], KP0 ) )
-
-	H = numpy.asmatrix(H)
-	w = numpy.linalg.solve(H, KP1)
-
-	P02  = rbfeval(KP0, w, P0)
-
-	# duplicate source, then apply the transformation
-	cmds.duplicate(source, n = "sourceDeformed")
-	cmds.move(0,0,0, "sourceDeformed")
-	cmds.select(clear=True)
-	cmds.select("sourceDeformed.vtx[*]")
-	AllPDef = cmds.ls(sl=1, fl=True)
-
-
-	ind = 0
-	for i in range(0,n):
-		cmds.move(float(P02[i][ind]), float(P02[i][ind+1]), float(P02[i][ind+2]), AllPDef[i])
     
-blendshapes = ["Blendshape1", "Blendshape2"]
-for i in blendshapes:
-    createBlendshape(sourceName[0], i, AllP0, AllPDef, "target"+i)
+def useSelection(_field, *args):
+    txt = cmds.ls(sl=True)
+    cmds.textField( _field, edit=True, text=txt[0])  
+        
+def selectBlendshapes(_field, *args):
+    txt = cmds.ls(sl=True)
+    cmds.textField(_field, edit=True, text = "Blendshapes set")
+    global BS 
+    BS = txt       
+    
+def useSelectedPoints(_field, source, *args):
+    # bool source
+    txt = cmds.ls(fl=True, os=True)
+    cmds.textField( _field, edit=True, text="Set "+str(len(txt))+" key points")
+    if (source == True):
+        global SelP0 
+        SelP0 = copy.deepcopy(txt)
+    else:
+        global SelP1 
+        SelP1 = copy.deepcopy(txt)
+
+def retrieveText(_field, *_args):
+    val = cmds.textField(_field, q=True, text=True)
+    return val
+    
+def matchTarg(sourceName, targetName, *args):
+    source = retrieveText(sourceName)
+    target = retrieveText(targetName)
+    matchTarget(source, target, SelP0, SelP1)
+    
+def blendShapes(blendshapes, *args):
+    shapes = str(retrieveText(blendshapes))
+    print "shapes: ", shapes
+    for i in BS:
+        print i
+        createBlendshape(sourceName[0], i, AllP0, AllPDef)
+
+def makeGUI():
+    winID = 'Expression Cloning'
+    if cmds.window(winID, exists = True):
+        cmds.deleteUI(winID)
+    cmds.window(winID)
+    cmds.columnLayout(columnWidth = 450)
+    
+    cmds.rowLayout(numberOfColumns=3, columnWidth3=(100, 200, 150))
+    cmds.text(label='Source Mesh:')
+    sourceName = cmds.textField(w = 200)
+    cmds.button(label = 'Set Selected as Source', c = ft.partial(useSelection, sourceName), w=150)
+    cmds.setParent('..')
+    
+    cmds.rowLayout(numberOfColumns=3, columnWidth3 = (100,200,150))
+    #target model
+    cmds.text(label='Source Key Points:')
+    SKP = cmds.textField(w = 200)
+    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, SKP, True), w = 150) 
+    cmds.setParent('..')
+    
+    cmds.rowLayout(numberOfColumns=3, columnWidth3=(100, 200, 150))
+    #target model
+    cmds.text(label='Target Mesh:')
+    targetName = cmds.textField(w = 200)
+    cmds.button(label = 'Set Selected as Target', c = ft.partial(useSelection, targetName), w = 150) 
+    cmds.setParent('..')
+    
+    cmds.rowLayout(numberOfColumns=3, columnWidth3 = (100, 200, 150))
+    cmds.text(label='Target Key Points')
+    TKP = cmds.textField(w = 200)
+    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, TKP, False), w = 150)
+    cmds.setParent('..')
+    
+    cmds.rowLayout(numberOfColumns=3, columnWidth3=(100, 200, 150))
+    cmds.text(label='Blendshapes')
+    blendshapes = cmds.textField(w = 200)
+    cmds.button(label = 'Set Blendshapes', c = ft.partial(selectBlendshapes, blendshapes), w = 150)
+    cmds.setParent('..')
+    
+    cmds.rowLayout(numberOfColumns=1, columnWidth1=550)
+    #, c = matchTarget(sourceName, targetName, SelP0, SelP1)) 
+    cmds.button(label = 'Deform Source Model' , c=ft.partial(matchTarg, sourceName, targetName), w = 450)
+    cmds.setParent('..')
+    cmds.rowLayout(numberOfColumns=1, columnWidth1=550)
+    cmds.button(label = 'Create Blendshapes ', c=ft.partial(blendShapes, blendshapes), w = 450)
+    cmds.setParent('..')
+    
+    cmds.showWindow()
+
+def main():
+    SelP0 = []
+    SelP1 = []
+    BS = []
+    makeGUI()
+    
+main()

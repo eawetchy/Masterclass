@@ -6,30 +6,33 @@ cmds.select(SelP1)
 # adapted from Alex Pitter's UI code
 
 import functools as ft
+import copy
 
 def useSelection(_field, *args):
     txt = cmds.ls(sl=True)
     cmds.textField( _field, edit=True, text=txt[0])
-    print txt[0]
     
-def useSelectedPoints(_field, _commandField, *args):
-    txt = cmds.ls(sl=True)
+def useSelectedPoints(_field, source, *args):
+    # bool source
+    txt = cmds.ls(fl=True, os=True)
     cmds.textField( _field, edit=True, text="Set "+str(len(txt))+" key points")
-    cmds.textField( _commandField, edit=True, text=str(txt))
-    print str(txt)
+    if (source == True):
+        global SelP0 
+        SelP0 = copy.deepcopy(txt)
+    else:
+        global SelP1 
+        SelP1 = copy.deepcopy(txt)
 
 def retrieveText(_field, *_args):
     val = cmds.textField(_field, q=True, text=True)
     return val
     
 def matchTarg(sourceName, targetName, SKPs, TKPs, *args):
-    source = retrieveText(sourceName)
-
-    target = retrieveText(targetName)
-
-    SelP0 = numpy.array(cmds.select(retrieveText(SKPs))).tolist()
-    SelP1 = numpy.array(cmds.select(retrieveText(TKPs))).tolist()
-    
+    source = str(retrieveText(sourceName))
+    print "source: ", source
+    target = str(retrieveText(targetName))
+    print "target: ", target    
+    print "SelP0: ", SelP0, "\nSelP1: ", SelP1
     matchTarget(source, target, SelP0, SelP1)
 
 def makeGUI():
@@ -50,7 +53,7 @@ def makeGUI():
     cmds.text(label='Source Key Points:')
     SKP = cmds.textField()
     arraySource = cmds.textField(vis = False)
-    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, SKP, arraySource)) 
+    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, SKP, True)) 
     cmds.setParent('..')
     
     cmds.rowLayout(numberOfColumns=3, columnWidth3=(150, 150, 150))
@@ -64,7 +67,7 @@ def makeGUI():
     cmds.text(label='Target Key Points')
     TKP = cmds.textField()
     arrayTarget = cmds.textField(vis = False)
-    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, TKP, arrayTarget))
+    cmds.button(label = 'Set Selected Points', c = ft.partial(useSelectedPoints, TKP, False))
     cmds.setParent('..')
     
     #, c = matchTarget(sourceName, targetName, SelP0, SelP1)) 
@@ -73,4 +76,9 @@ def makeGUI():
     
     cmds.showWindow()
 
-makeGUI()
+def main():
+    SelP0 = []
+    SelP1 = []
+    makeGUI()
+    
+main()
