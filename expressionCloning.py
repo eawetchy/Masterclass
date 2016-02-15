@@ -31,7 +31,7 @@ def rbfeval(C, W, P):
     h = numpy.asmatrix(numpy.zeros((len(W),1)))
     for i in range(0, len(P)):
         for j in range(0, len(C)):
-            h[j] = RBFbasis(numpy.linalg.norm(P[i] - C[j]), 1)
+            h[j] = RBFbasis(numpy.linalg.norm(P[i] - C[j]))
     #reconstruct point i
         P2[i] = (W.transpose() * h).transpose()
     return P2
@@ -264,6 +264,7 @@ def matchTarget(source, target, SelP0, SelP1):
     cmds.select(clear=True)
     # get indices of all vertices in source and target meshes
     cmds.select(source+".vtx[*]")
+    global AllP0
     AllP0 = cmds.ls(sl=1, fl=True)
     cmds.select(clear=True)
     cmds.select(target+".vtx[*]")
@@ -287,7 +288,7 @@ def matchTarget(source, target, SelP0, SelP1):
     H = numpy.zeros((m,m))
     for i in range(0, m):
         for j in range(0, m):
-            H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j]), 1) # closestPoint( KP0[j], KP0 ) )
+            H[i,j]=RBFbasis( numpy.linalg.norm(KP0[i] - KP0[j])) # closestPoint( KP0[j], KP0 ) )
 
     H = numpy.asmatrix(H)
     # solve for weights
@@ -301,6 +302,7 @@ def matchTarget(source, target, SelP0, SelP1):
     cmds.move(0,0,0, "sourceDeformed")
     cmds.select(clear=True)
     cmds.select("sourceDeformed.vtx[*]")
+    global AllPDef
     AllPDef = cmds.ls(sl=1, fl=True)
     ind = 0
     for i in range(0,n):
@@ -309,12 +311,10 @@ def matchTarget(source, target, SelP0, SelP1):
 def createBlendshape(source, blendshape, AllP0, AllPDef):
     #------------MOTION VECTOR TRANSFER-------------#
     # create array of all vertices of the blendshape
-    print blendshape
     cmds.move(0,0,0, blendshape)
     cmds.select(clear=True)
     cmds.select(blendshape+".vtx[*]")
     AllPBlend = cmds.ls(sl=1, fl=True)
-
     #vertex list original source mesh
     O = getVtxPos( source )
 
@@ -326,10 +326,11 @@ def createBlendshape(source, blendshape, AllP0, AllPDef):
     MV = numpy.asmatrix(MV)
     
     '''
-    # rotating and scaling of motion vectors using these functions gives wrong results,
+    # rotating and scaling of motion vectors using these functions gives wrong results
+    # and is not deforming the motion vectors like it should.
     # I have not been able to debug this in the given time and have therefore taken these parts out for the moment.
-    # Simply using the motion vectors on the deformed source mesh will result in acceptable blend shapes
-    # given that the proportions of source and target meshes are not too different
+    # Simply using the motion vectors on the deformed source mesh results in acceptable blend shapes
+    
     #-------------------------ROTATION-----------------------------#
 
     N0 = normalMatrix(AllP0) # normal matrix for source
@@ -355,15 +356,16 @@ def createBlendshape(source, blendshape, AllP0, AllPDef):
     S = numpy.asarray(S)
 
     #--------OVERALL MOTION VECTOR ROTATION AND MAGNITUDE ADJUSTMENT--------#
-
+    '''
     # duplicate deformed source to make blendshape
+    blendName = "target" + blendshape
     cmds.duplicate("sourceDeformed", n = blendName)
     cmds.select(clear=True)
     cmds.select(blendName+".vtx[*]")
     defBlend = cmds.ls(sl=1, fl=True)
-    '''
 
-    for i in range(0,n):
+
+    for i in range(0,len(AllP0)):
         cmds.move(float(MV[i, 0]), float(MV[i, 1]), float(MV[i, 2]), defBlend[i], r=True)
         '''
         MVdef = S[i]*R[i]*numpy.transpose(MV[i])
@@ -419,12 +421,11 @@ def matchTarg(sourceName, targetName, *args):
     target = retrieveText(targetName)
     matchTarget(source, target, SelP0, SelP1)
     
-def blendShapes(blendshapes, *args):
+def blendShapes(sourceName, blendshapes, *args):
     shapes = str(retrieveText(blendshapes))
-    print "shapes: ", shapes
+    source = retrieveText(sourceName)
     for i in BS:
-        print i
-        createBlendshape(sourceName[0], i, AllP0, AllPDef)
+        createBlendshape(source, i, AllP0, AllPDef)
 
 def makeGUI():
     winID = 'Expression Cloning'
@@ -470,15 +471,18 @@ def makeGUI():
     cmds.button(label = 'Deform Source Model' , c=ft.partial(matchTarg, sourceName, targetName), w = 450)
     cmds.setParent('..')
     cmds.rowLayout(numberOfColumns=1, columnWidth1=550)
-    cmds.button(label = 'Create Blendshapes ', c=ft.partial(blendShapes, blendshapes), w = 450)
+    cmds.button(label = 'Create Blendshapes ', c=ft.partial(blendShapes, sourceName, blendshapes), w = 450)
     cmds.setParent('..')
     
     cmds.showWindow()
 
 def main():
+    # declare some global variables
     SelP0 = []
     SelP1 = []
     BS = []
+    AllP0 = []
+    AllPDef = []
     makeGUI()
     
 main()
